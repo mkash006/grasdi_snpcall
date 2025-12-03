@@ -29,7 +29,7 @@ All outputs are organized in `results/`, and logs are saved in the `logs/` direc
 - [merge_vcf_allchr.sh](merge_vcf_allchr.sh)
 
 Making Genomicsdb and GenotypeGVCFs are separated intentionally from Snakemake because:
-- Selecting scaffolds or chromosomes of interest can be manually performed using [[make_genomicsdb.sh]], [[genotype_gvcf.sh]] and [[merge_vcf_allchr.sh]]
+- Selecting scaffolds or chromosomes of interest can be manually performed using [make_genomicsdb.sh], [genotype_gvcf.sh] and [merge_vcf_allchr.sh]
 - This workflow allows to accumulation of g.vcf files from separate sequencing runs and then combines the  haplotypecaller step for separate runs
 ---
 
