@@ -9,7 +9,7 @@ This repository contains a GATK-based variant calling pipeline designed for GRAS
 ##  Pipeline Overview
 
 ###  Snakefile: Per-sample GVCF Calling
-The `Snakefile` performs **per-sample variant calling** and generates **GVCF files** via GATK HaplotypeCaller. Key steps include:
+The [`Snakefile`](Snakefile) performs **per-sample variant calling** and generates **GVCF files** via GATK HaplotypeCaller. Key steps include:
 
 1. Reference Indexing
 2. Alignment to Reference (BWA-MEM)
