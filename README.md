@@ -24,9 +24,9 @@ All outputs are organized in `results/`, and logs are saved in the `logs/` direc
 ### `.sh` Scripts for initiating snakemake and joint genotyping using GATK gvcf mode
 
 - [Snakemake_init.sh](Snakemake_init.sh)
-- [make_genomicsdb.sh]
-- [[genotype_gvcf.sh]]
-- [[merge_vcf_allchr.sh]]
+- [make_genomicsdb.sh](make_genomicsdb.sh)
+- [genotype_gvcf.sh](genotype_gvcf.sh)
+- [merge_vcf_allchr.sh](merge_vcf_allchr.sh)
 
 Making Genomicsdb and GenotypeGVCFs are separated intentionally from Snakemake because:
 - Selecting scaffolds or chromosomes of interest can be manually performed using [[make_genomicsdb.sh]], [[genotype_gvcf.sh]] and [[merge_vcf_allchr.sh]]
