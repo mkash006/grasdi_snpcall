@@ -1,6 +1,6 @@
 # GRAS-Di SNP Calling Pipeline
 
-This repository contains a pipeline for SNP discovery from GRAS-Di (Genotyping by Random Amplicon Sequencing–Direct) sequencing data using a combination of **Snakemake** and **bash scripts**. The pipeline is tailored for use on an HPC cluster with SLURM and follows **GATK Best Practices** for variant calling.
+This repository contains a GATK-based variant calling pipeline designed for GRAS-Di (Genotyping by Random Amplicon Sequencing–Direct) sequencing data using a combination of `Snakemake` and `bash`. The pipeline is tailored for use on an HPC cluster with SLURM and follows **GATK Best Practices** for variant calling.
 
 **Note:** All steps assume input files have already been **trimmed to remove adapter contamination**. Raw FASTQ files must be pre-processed using tools such as **Trimmomatic** or **fastp** before running this pipeline.
 
