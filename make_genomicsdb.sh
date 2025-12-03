@@ -1,4 +1,4 @@
-#!/bin/bash
+```#!/bin/bash
 #SBATCH --job-name=GenomicsDB_Import
 #SBATCH --partition=epyc
 #SBATCH --time=72:00:00
@@ -65,4 +65,4 @@ gatk --java-options "-Xmx100G" GenomicsDBImport \
   --intervals "$CHROM" \
   --tmp-dir "$TMP_PATH"
 
-echo "==== Finished $CHROM ===="
+echo "==== Finished $CHROM ===="```
