@@ -23,7 +23,7 @@ All outputs are organized in `results/`, and logs are saved in the `logs/` direc
 
 ### `.sh` Scripts for initiating snakemake and joint genotyping using GATK gvcf mode
 
-- (Snakemake_init.sh)[Snakemake_init.sh]
+- (mkash006/grasdi_snpcall/Snakemake_init.sh)[Snakemake_init.sh]
 - [make_genomicsdb.sh]
 - [[genotype_gvcf.sh]]
 - [[merge_vcf_allchr.sh]]
