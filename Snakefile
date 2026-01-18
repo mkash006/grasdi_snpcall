@@ -1,41 +1,41 @@
 import os
 from glob import glob
-#sample configuration
+
+# -----------------------------
+# Samples and reference
+# -----------------------------
 SAMPLES = sorted(set(
     os.path.basename(f).replace('_R1_paired.fq.gz', '')
     for f in glob("data/*_R1_paired.fq.gz")
 ))
 
-REF = "reference/h_formosa.ref.fasta"
-#CPU and parralel configuration
-TOTAL_CPUS = 100
-TOTAL_MEM = 500000  # 500GB in MB
+REF = "reference/p_reticulata.ref.fasta"
 
-# Parallel jobs configuration
-SAMPLES_IN_PARALLEL = 4  # For align/sort and mark_duplicates
-HC_SAMPLES_IN_PARALLEL = 2  # For haplotype_caller
+ALIGN_THREADS = 20
+RG_THREADS = 4
+HC_THREADS = 20
 
-# Memory-optimized thread allocation
-ALIGN_THREADS = 20  # 4x20=80 CPUs (160GB)
-MARKDUP_THREADS = 10  # 4x10=40 CPUs (120GB)
-HC_THREADS = 20  # 2x20=40 CPUs (220GB)
-
+# -----------------------------
+# Final targets
+# -----------------------------
 rule all:
     input:
         expand("results/vcf/{sample}_snp_calls.g.vcf.gz", sample=SAMPLES),
-        expand("results/bam/{sample}_marked_duplicates.bam", sample=SAMPLES),
-        expand("results/bam/{sample}_marked_duplicates.bai", sample=SAMPLES),
-        "logs/notify_pipeline_complete.txt"
-        
+        expand("results/bam/{sample}_rg.bam", sample=SAMPLES),
+        expand("results/bam/{sample}_rg.bam.bai", sample=SAMPLES)
+
+# -----------------------------
+# Index reference
+# -----------------------------
 rule index_reference:
     input:
         REF
     output:
         REF + ".bwt",
-        REF + ".fai",  # samtools index
-        REF.replace(".fasta", ".dict")  # picard dictionary
+        REF + ".fai",
+        REF.replace(".fasta", ".dict")
     threads: 4
-    resources: mem_mb=32000  # 32GB
+    resources: mem_mb=32000
     log:
         "logs/index_reference.log"
     shell:
@@ -44,23 +44,26 @@ rule index_reference:
         module load bwa/0.7.17
         module load samtools/1.18
         module load gatk/4.3.0.0
-        echo "[`date`] Indexing reference genome" > {log}
+
+        echo "[`date`] Indexing reference" > {log}
         bwa index {input} >> {log} 2>&1
         samtools faidx {input} >> {log} 2>&1
         gatk CreateSequenceDictionary -R {input} >> {log} 2>&1
-        echo "[`date`] Done indexing" >> {log}
         """
 
+# -----------------------------
+# Align + sort
+# -----------------------------
 rule align_and_sort:
     input:
-        index=rules.index_reference.output,
-        r1="data/{sample}_R1_paired.fq.gz",
-        r2="data/{sample}_R2_paired.fq.gz",
-        ref=REF
+        index = rules.index_reference.output,
+        r1 = "data/{sample}_R1_paired.fq.gz",
+        r2 = "data/{sample}_R2_paired.fq.gz",
+        ref = REF
     output:
-        bam="results/bam/{sample}_aligned.bam"
+        bam = "results/bam/{sample}_aligned.bam"
     threads: ALIGN_THREADS
-    resources: mem_mb=160000 #160GB
+    resources: mem_mb=160000
     log:
         "logs/align/{sample}.log"
     shell:
@@ -68,56 +71,85 @@ rule align_and_sort:
         set -euo pipefail
         module load bwa/0.7.17
         module load samtools/1.18
+
         echo "[`date`] Aligning {wildcards.sample}" > {log}
         bwa mem -t {threads} {input.ref} {input.r1} {input.r2} 2>> {log} | \
         samtools view -Sb - 2>> {log} | \
         samtools sort -@ {threads} -o {output.bam} 2>> {log}
         echo "[`date`] Finished alignment {wildcards.sample}" >> {log}
         """
-        
-rule mark_duplicates:
+
+# -----------------------------
+# Add read group
+# -----------------------------
+rule add_readgroup:
     input:
-        bam="results/bam/{sample}_aligned.bam"
+        bam = "results/bam/{sample}_aligned.bam"
     output:
-        bam="results/bam/{sample}_marked_duplicates.bam",
-        index="results/bam/{sample}_marked_duplicates.bai",
-        metrics="results/bam/{sample}_marked_dup_metrics.txt",
-        sorted_bam="results/bam/{sample}_sorted_marked_duplicates.bam"  # Add a separate output for sorted BAM
-    threads: MARKDUP_THREADS
-    resources: mem_mb=120000  # 120GB/sample
+        bam = "results/bam/{sample}_rg.bam"
+    threads: RG_THREADS
+    resources: mem_mb=160000
     log:
-        "logs/markdup/{sample}.log"
+        "logs/readgroup/{sample}.log"
     shell:
         """
         set -euo pipefail
         module load gatk/4.3.0.0
-        module load samtools/1.18
-        gatk --java-options "-Xmx120G -XX:ParallelGCThreads={threads}" MarkDuplicates \
+
+        ID="RG1"
+        LB="Lib1"
+        PL="ILLUMINA"
+        PU="Unit1"
+        SM="{wildcards.sample}"
+
+        gatk AddOrReplaceReadGroups \
             -I {input.bam} \
             -O {output.bam} \
-            -M {output.metrics} \
-            --CREATE_INDEX true \
-            --VALIDATION_STRINGENCY LENIENT \
-            --ASSUME_SORTED true \
-            >> {log} 2>&1 && \
-        samtools sort {output.bam} -o {output.sorted_bam} >> {log} 2>&1
+            -ID $ID -LB $LB -PL $PL -PU $PU -SM $SM \
+            >> {log} 2>&1
         """
 
+
+# -----------------------------
+# NEW: Index read-group BAM
+# -----------------------------
+rule index_bam:
+    input:
+        "results/bam/{sample}_rg.bam"
+    output:
+        "results/bam/{sample}_rg.bam.bai"
+    threads: 2
+    log:
+        "logs/index_bam/{sample}.log"
+    shell:
+        """
+        set -euo pipefail
+        module load samtools/1.18
+
+        samtools index {input} >> {log} 2>&1
+        """
+
+
+# -----------------------------
+# HaplotypeCaller
+# -----------------------------
 rule haplotype_caller:
     input:
-        bam="results/bam/{sample}_sorted_marked_duplicates.bam",
-        ref=REF
+        bam = "results/bam/{sample}_rg.bam",
+        bai = "results/bam/{sample}_rg.bam.bai",
+        ref = REF
     output:
-        gvcf="results/vcf/{sample}_snp_calls.g.vcf.gz",
-        bam="results/bam_snpcall/{sample}_hpcall.bam"
+        gvcf = "results/vcf/{sample}_snp_calls.g.vcf.gz",
+        bam = "results/bam_snpcall/{sample}_hpcall.bam"
     threads: HC_THREADS
-    resources: mem_mb=220000 #220GB
+    resources: mem_mb=220000
     log:
         "logs/haplotypecaller/{sample}.log"
     shell:
         """
         set -euo pipefail
         module load gatk/4.3.0.0
+
         gatk --java-options "-Xmx120G -XX:ParallelGCThreads={threads}" HaplotypeCaller \
             -R {input.ref} \
             -I {input.bam} \
@@ -125,15 +157,4 @@ rule haplotype_caller:
             --emit-ref-confidence GVCF \
             --bam-output {output.bam} \
             -O {output.gvcf} >> {log} 2>&1
-        """
-
-rule notify_completion:
-    input:
-        expand("results/vcf/{sample}_snp_calls.g.vcf.gz", sample=SAMPLES)
-    output:
-        "logs/notify_pipeline_complete.txt"
-    shell:
-        """
-        echo "Pipeline completed on `date`" > {output}
-        echo "Your Snakemake pipeline has finished successfully." | mail -s "HPCC: Snakemake pipeline complete" mkash006@ucr.edu
         """
