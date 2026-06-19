@@ -1,28 +1,24 @@
-#!/bin/bash
-#SBATCH --job-name=snakemake_bamvcf
-#SBATCH --output=logs/snakemake_%j.log
-#SBATCH --error=logs/snakemake_%j.err
-#SBATCH --partition=epyc
+#!/bin/bash -l
+#SBATCH --job-name=snpcall_init
+#SBATCH --output=logs/snakemake_init_%j.out
+#SBATCH --time=120:00:00
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=100
-#SBATCH --mem=500G  # Now using 500GB total
-#SBATCH --time=72:00:00
-#SBATCH --mail-user=mkash006@ucr.edu
-#SBATCH --mail-type=ALL
+#SBATCH --cpus-per-task=1
+#SBATCH --mem=4G
 
-# Load modules
-module load snakemake python bwa samtools gatk
+module load snakemake/7.18
+module load bwa
+module load samtools
+module load gatk
+export PYTHONNOUSERSITE=1
+mkdir -p logs
 
-# Create necessary log and result directories
-mkdir -p logs/align logs/markdup logs/haplotypecaller
-mkdir -p results/bam results/vcf results/bam_snpcall
-
-
-# Run with memory-optimized settings
 snakemake \
-    --cores 100 \
-    --jobs 4 \
-    --resources mem_mb=500000 \
-    --latency-wait 30 \
-    --scheduler ilp \
-    --rerun-incomplete
+    --snakefile Snakefile \
+    --jobs 100 \
+    --latency-wait 60 \
+    --rerun-incomplete \
+    --keep-going \
+    --cluster "sbatch --cpus-per-task={threads} --mem={resources.mem_mb} --time=24:00:00 --output=logs/slurm-%j.out"
+
+echo "Snakemake workflow submitted."
