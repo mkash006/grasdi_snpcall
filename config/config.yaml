@@ -1,0 +1,26 @@
+# ===========================================================================
+# GRAS-Di SNP calling — configuration
+# Per-sample GVCF generation (BWA-MEM -> sort -> HaplotypeCaller)
+# Reference is assumed pre-indexed (no indexing rules in this workflow).
+# ===========================================================================
+
+# Reference genome (already indexed: .fai, .dict, BWA .amb/.ann/.bwt/.pac/.sa)
+reference: "reference/P_prolifica.ref.fasta"
+
+# Directory holding trimmed paired-end reads
+reads_dir: "data"
+
+# Filename pattern for paired reads. {sample} is the wildcard, {read} is 1 or 2.
+# Adjust the suffix to match your trimmed FASTQ naming, e.g.:
+#   <sample>_R1.trimmed.fastq.gz / <sample>_R2.trimmed.fastq.gz
+r1_suffix: "_R1.trimmed.fastq.gz"
+r2_suffix: "_R2.trimmed.fastq.gz"
+
+# Read group metadata
+platform: "ILLUMINA"
+
+# Per-rule resources (threads / mem_mb / time)
+resources:
+  bwa:       { threads: 12, mem_mb: 32000, time: "24:00:00" }
+  markdup:   { threads: 4,  mem_mb: 24000, time: "12:00:00" }
+  haplotype: { threads: 4,  mem_mb: 32000, time: "48:00:00" }
