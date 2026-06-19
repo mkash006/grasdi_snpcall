@@ -2,8 +2,8 @@
 
 GATK Best Practices variant calling for GRAS-Di sequencing data, built with
 Snakemake + bash for SLURM on UCR HPCC. Input reads are assumed already
-adapter-trimmed (Trimmomatic/fastp). **The reference genome is assumed
-pre-indexed** — this workflow does not include reference indexing.
+adapter-trimmed (Trimmomatic/fastp). The reference genome is assumed
+pre-indexed
 
 ## Layout
 
