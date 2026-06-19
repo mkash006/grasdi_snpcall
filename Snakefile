@@ -9,11 +9,19 @@ SAMPLES = sorted(set(
     for f in glob("data/*_R1_paired.fq.gz")
 ))
 
-REF = "reference/p_reticulata.ref.fasta"
+REF = "reference/P_prolifica.ref.fasta"
 
-ALIGN_THREADS = 20
-RG_THREADS = 4
-HC_THREADS = 20
+# -----------------------------
+# Resources
+# threads / mem_mb sized for a 720 Mbp reference and light GRAS-Di samples.
+# Kept lean so SLURM can pack many of the 1400 jobs in parallel.
+# -----------------------------
+ALIGN_THREADS, ALIGN_MEM = 12, 24000
+RG_THREADS,    RG_MEM    = 2,  8000
+INDEX_THREADS            = 2
+HC_THREADS,    HC_MEM    = 8,  32000
+
+SORT_MEM_PER_THREAD = "1500M"   # caps samtools sort so it cannot balloon
 
 # -----------------------------
 # Final targets
@@ -25,45 +33,18 @@ rule all:
         expand("results/bam/{sample}_rg.bam.bai", sample=SAMPLES)
 
 # -----------------------------
-# Index reference
-# -----------------------------
-rule index_reference:
-    input:
-        REF
-    output:
-        REF + ".bwt",
-        REF + ".fai",
-        REF.replace(".fasta", ".dict")
-    threads: 4
-    resources: mem_mb=32000
-    log:
-        "logs/index_reference.log"
-    shell:
-        """
-        set -euo pipefail
-        module load bwa/0.7.17
-        module load samtools/1.18
-        module load gatk/4.3.0.0
-
-        echo "[`date`] Indexing reference" > {log}
-        bwa index {input} >> {log} 2>&1
-        samtools faidx {input} >> {log} 2>&1
-        gatk CreateSequenceDictionary -R {input} >> {log} 2>&1
-        """
-
-# -----------------------------
 # Align + sort
+# Reference is already indexed (.fai, .dict, bwa indices in reference/)
 # -----------------------------
 rule align_and_sort:
     input:
-        index = rules.index_reference.output,
         r1 = "data/{sample}_R1_paired.fq.gz",
         r2 = "data/{sample}_R2_paired.fq.gz",
         ref = REF
     output:
         bam = "results/bam/{sample}_aligned.bam"
     threads: ALIGN_THREADS
-    resources: mem_mb=160000
+    resources: mem_mb=ALIGN_MEM
     log:
         "logs/align/{sample}.log"
     shell:
@@ -74,10 +55,9 @@ rule align_and_sort:
 
         echo "[`date`] Aligning {wildcards.sample}" > {log}
         bwa mem -t {threads} {input.ref} {input.r1} {input.r2} 2>> {log} | \
-        samtools view -Sb - 2>> {log} | \
-        samtools sort -@ {threads} -o {output.bam} 2>> {log}
+        samtools sort -@ {threads} -m %s -o {output.bam} - 2>> {log}
         echo "[`date`] Finished alignment {wildcards.sample}" >> {log}
-        """
+        """ % SORT_MEM_PER_THREAD
 
 # -----------------------------
 # Add read group
@@ -88,7 +68,7 @@ rule add_readgroup:
     output:
         bam = "results/bam/{sample}_rg.bam"
     threads: RG_THREADS
-    resources: mem_mb=160000
+    resources: mem_mb=RG_MEM
     log:
         "logs/readgroup/{sample}.log"
     shell:
@@ -109,16 +89,15 @@ rule add_readgroup:
             >> {log} 2>&1
         """
 
-
 # -----------------------------
-# NEW: Index read-group BAM
+# Index read-group BAM
 # -----------------------------
 rule index_bam:
     input:
         "results/bam/{sample}_rg.bam"
     output:
         "results/bam/{sample}_rg.bam.bai"
-    threads: 2
+    threads: INDEX_THREADS
     log:
         "logs/index_bam/{sample}.log"
     shell:
@@ -129,9 +108,9 @@ rule index_bam:
         samtools index {input} >> {log} 2>&1
         """
 
-
 # -----------------------------
 # HaplotypeCaller
+# Heap is derived from mem_mb so the SLURM request and -Xmx never drift apart.
 # -----------------------------
 rule haplotype_caller:
     input:
@@ -142,7 +121,9 @@ rule haplotype_caller:
         gvcf = "results/vcf/{sample}_snp_calls.g.vcf.gz",
         bam = "results/bam_snpcall/{sample}_hpcall.bam"
     threads: HC_THREADS
-    resources: mem_mb=220000
+    resources: mem_mb=HC_MEM
+    params:
+        heap = lambda wc, resources: int(resources.mem_mb * 0.85)
     log:
         "logs/haplotypecaller/{sample}.log"
     shell:
@@ -150,11 +131,12 @@ rule haplotype_caller:
         set -euo pipefail
         module load gatk/4.3.0.0
 
-        gatk --java-options "-Xmx120G -XX:ParallelGCThreads={threads}" HaplotypeCaller \
+        gatk --java-options "-Xmx{params.heap}m -XX:ParallelGCThreads=2" HaplotypeCaller \
             -R {input.ref} \
             -I {input.bam} \
             --sample-name {wildcards.sample} \
             --emit-ref-confidence GVCF \
+            --native-pair-hmm-threads {threads} \
             --bam-output {output.bam} \
             -O {output.gvcf} >> {log} 2>&1
         """
